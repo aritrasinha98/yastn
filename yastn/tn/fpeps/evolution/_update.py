@@ -18,7 +18,7 @@ class Gates(NamedTuple):
     nn : list = None   # list of Gate_nn
 
 
-def evolution_step_(psi, gates, step, truncation_mode, env_type, opts_svd=None):  
+def evolution_step_(psi, gates, step, truncation_mode, env_type, opts_svd=None, flag=None):  
 
     r"""
     Perform a single step of evolution on a PEPS by applying a list of gates,
@@ -57,16 +57,16 @@ def evolution_step_(psi, gates, step, truncation_mode, env_type, opts_svd=None):
     infos = []
 
     for gate in gates.local:
-        psi = apply_local_gate_(psi, gate)
+        psi = apply_local_gate_(psi, gate, flag)
 
     all_gates = gates.nn + gates.nn[::-1]
 
     for gate in all_gates:    
-        psi, info = evol_machine(psi, gate, truncation_mode, step, env_type, opts_svd)
+        psi, info = evol_machine(psi, gate, truncation_mode, step, env_type, opts_svd, flag)
         infos.append(info)
 
     for gate in gates.local[::-1]:
-        psi = apply_local_gate_(psi, gate)
+        psi = apply_local_gate_(psi, gate, flag)
 
     if step == 'svd-update':
         return psi, info 
@@ -104,12 +104,8 @@ def gates_homogeneous(psi, nn_gates, loc_gates):
         for i in range(len(nn_gates)):
             gates_nn.append(Gate_nn(A=nn_gates[i][0], B=nn_gates[i][1], bond=bd))
     gates_loc = []
-    if psi.lattice=='checkerboard':
-        gates_loc.append(Gate_local(A=loc_gates, site=(0,0)))
-        gates_loc.append(Gate_local(A=loc_gates, site=(0,1)))
-    elif psi.lattice != 'checkerboard':
-        for site in psi.sites():
-            gates_loc.append(Gate_local(A=loc_gates, site=site))
+    for site in psi.sites():
+        gates_loc.append(Gate_local(A=loc_gates, site=site))
     return Gates(local=gates_loc, nn=gates_nn)
 
 

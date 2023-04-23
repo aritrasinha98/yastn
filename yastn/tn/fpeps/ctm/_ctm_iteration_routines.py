@@ -644,11 +644,19 @@ def fPEPS_l(A, op):
     chosen fermionic order) while calulating expectation values of non-local
     fermionic operators in vertical direction
     """
-    Aop = tensordot(A, op, axes=(4, 1)) # t l b r [s a] c
-    Aop = Aop.swap_gate(axes=(2, 5))
-    Aop = Aop.fuse_legs(axes=(0, 1, 2, (3, 5), 4)) # t l b [r c] [s a]
+    if A.ndim == 5:
+        Aop = tensordot(A, op, axes=(4, 1)) # t l b r [s a] c
+        Aop = Aop.swap_gate(axes=(2, 5))
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, (3, 5), 4)) # t l b [r c] [s a]
+    elif A.ndim == 6:
+        # when we have to introduce a string for creating ahole at the middle of the lattice
+        Aop = tensordot(A, op, axes=(5, 1))  # t l b r str [s a] c
+        Aop = Aop.swap_gate(axes=(2, 6))
+        Aop = Aop.swap_gate(axes=(4, 6))
+        Aop = Aop.unfuse_legs(axes=(5)) # t l b r str s a c
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, (3, 7), 5, (6, 4))) # t l b [r c] s [a str]
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, 3, (4, 5))) # t l b [r c] [s [a str]] 
     return Aop
-
 
 def fPEPS_r(A, op):
     """
@@ -656,8 +664,16 @@ def fPEPS_r(A, op):
     chosen fermionic order) while calulating expectation values of non-local
     fermionic operators in vertical direction
     """
-    Aop = tensordot(A, op, axes=(4, 1))
-    Aop = Aop.fuse_legs(axes=(0, (1, 5), 2, 3, 4)) # t [l c] b r [s a]
+
+    if A.ndim == 5:  # t l b r [s a] c
+        Aop = tensordot(A, op, axes=(4, 1))
+        Aop = Aop.fuse_legs(axes=(0, (1, 5), 2, 3, 4)) # t [l c] b r [s a]
+    elif A.ndim == 6:
+        # when we have to introduce a string for creating a hole at the middle of the lattice
+        Aop = tensordot(A, op, axes=(5, 1))  # t l b r str [s a] c
+        Aop = Aop.unfuse_legs(axes=(5)) # t l b r str s a c
+        Aop = Aop.fuse_legs(axes=(0, (1, 7), 2, 3, 5, (6, 4))) # t [l c] b r s [a str]
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, 3, (4, 5))) # t [l c] b r [s [a str]]
     return Aop
 
 
@@ -667,10 +683,16 @@ def fPEPS_t(A, op):
     chosen fermionic order) while calulating expectation values of non-local
     fermionic operators in vertical direction
     """
-    Aop = tensordot(A, op, axes=(4, 1))
-    Aop = Aop.fuse_legs(axes=(0, 1, (2, 5), 3, 4)) # t l [b c] r [s a]
+    if A.ndim == 5:
+        Aop = tensordot(A, op, axes=(4, 1))
+        Aop = Aop.fuse_legs(axes=(0, 1, (2, 5), 3, 4)) # t l [b c] r [s a]
+    elif A.ndim == 6:
+        # when we have to introduce a string for creating a hole at the middle of the lattice
+        Aop = tensordot(A, op, axes=(5, 1))  # t l b r str [s a] c
+        Aop = Aop.unfuse_legs(axes=(5)) # t l b r str s a c
+        Aop = Aop.fuse_legs(axes=(0, 1, (2, 7), 3, 5, (6, 4))) # t l [b c] r s [a str]
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, 3, (4, 5))) # t l [b c] r [s [a str]]
     return Aop
-
 
 def fPEPS_b(A, op):
     """
@@ -678,9 +700,17 @@ def fPEPS_b(A, op):
     chosen fermionic order) while calulating expectation values of non-local 
     fermionic operators in vertical direction
     """
-    Aop = tensordot(A, op, axes=(4, 1))
-    Aop = Aop.swap_gate(axes=(1, 5))
-    Aop = Aop.fuse_legs(axes=((0, 5), 1, 2, 3, 4)) # [t c] l b r [s a]
+    if A.ndim == 5:
+        Aop = tensordot(A, op, axes=(4, 1))
+        Aop = Aop.swap_gate(axes=(1, 5))
+        Aop = Aop.fuse_legs(axes=((0, 5), 1, 2, 3, 4)) # [t c] l b r [s a]
+    elif A.ndim == 6:
+        # when we have to introduce a string for creating a hole at the middle of the lattice
+        Aop = tensordot(A, op, axes=(5, 1))  # t l b r str [s a] c
+        Aop = Aop.swap_gate(axes=(1, 6))
+        Aop = Aop.unfuse_legs(axes=(5)) # t l b r str s a c
+        Aop = Aop.fuse_legs(axes=((0, 7), 1, 2, 3, 5, (6, 4))) # [t c] l b r s [a str]
+        Aop = Aop.fuse_legs(axes=(0, 1, 2, 3, (4, 5))) # [t c] l b r [s [a str]]
     return Aop
 
 def fPEPS_op1s(A, op):
@@ -688,7 +718,12 @@ def fPEPS_op1s(A, op):
     attaches operator to the tensor while calulating expectation
     values of local operators, no need to fuse auxiliary legs
     """
-    Aop = tensordot(A, op, axes=(4, 1)) # t l b r [s a]
+    if A.ndim == 5:
+        Aop = tensordot(A, op, axes=(4, 1)) # t l b r [s a]
+    elif A.ndim == 6:
+        Aop = tensordot(A, op, axes=(5, 1)).unfuse_legs(axes=5) # t l b r str s a
+        Aop = Aop.fuse_legs(axes=(0,1,2,3,5,(6,4))) # t l b r s [a str]
+        Aop = Aop.fuse_legs(axes=(0,1,2,3,(4,5))) # t l b r [s [a str]]
     return Aop
 
 def fPEPS_fuse_physical(A):
@@ -810,19 +845,24 @@ def fPEPS_fuse_layers(AAb, EVonly=False):
             tt = tt.unfuse_legs(axes=0)  # (1t 1b) (0t 0b) (2t 2b) (3t 3b)
             st['bl'] = tt.fuse_legs(axes=((2, 0), (1, 3)))  # ((2t 2b) (1t 1b)) ((0t 0b) (3t 3b))
 
-
-def check_consistency_tensors(A):
+def check_consistency_tensors(A, flag=None):
     # to check if the A tensors have the appropriate configuration of legs i.e. t l b r [s a]
-
+  
     Ab = fpeps.Peps(A.lattice, A.dims, A.boundary)
     if A[0, 0].ndim == 6:
-        for ms in Ab.sites(): 
-            Ab[ms] = A[ms].fuse_legs(axes=(0, 1, 2, 3, (4, 5)))
+        for ms in A.sites(): 
+            Ab[ms] = A[ms].fuse_legs(axes=(0, 1, 2, 3, (4, 5))) 
     elif A[0, 0].ndim == 3:
-        for ms in Ab.sites():
-            Ab[ms] = A[ms].unfuse_legs(axes=(0, 1)) # system and ancila are fused by default
+        for ms in A.sites():
+            target_site = (round((A.Nx-1)*0.5), round((A.Ny-1)*0.5))
+            if flag == 'hole':
+                if ms ==  target_site:
+                    Ab[ms] = A[ms].unfuse_legs(axes=2).unfuse_legs(axes=3).fuse_legs(axes=(0, 1, 4, (2, 3))).unfuse_legs(axes=(0, 1)) # t l b r str [s a]
+                else:
+                    Ab[ms] = A[ms].unfuse_legs(axes=(0, 1)) # system and ancila are fused by default
+            else:
+                Ab[ms] = A[ms].unfuse_legs(axes=(0, 1)) # system and ancila are fused by default
     else:
-        for ms in Ab.sites():
+        for ms in A.sites():
             Ab[ms] = A[ms]   # system and ancila are fused by default
     return Ab
-        

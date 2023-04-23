@@ -92,7 +92,7 @@ def initialize_spinless_filled(fid, fc, fcdag, net):
     return gamma
 
 
-def initialize_Neel_spinfull(fc_up, fc_dn, fcdag_up, fcdag_dn, net):
+def initialize_Neel_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net):
 
     """ 
     Initializes a Neel state in a PEPS representation.

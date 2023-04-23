@@ -18,7 +18,7 @@ class CTMRGout(NamedTuple):
     tt : float = None
 
 
-def ctmrg(psi, max_sweeps=1, iterator_step=None, AAb_mode=0, fix_signs=None, env=None, opts_svd=None):
+def ctmrg(psi, max_sweeps=1, iterator_step=None, AAb_mode=0, fix_signs=None, env=None, opts_svd=None, flag=None):
     r"""
     Perform CTMRG sweeps until convergence, starting from PEPS and environmental corner and edge tensors :code:`psi`.
 
@@ -71,14 +71,14 @@ def ctmrg(psi, max_sweeps=1, iterator_step=None, AAb_mode=0, fix_signs=None, env
     if env is None:
         env = init_rand(psi, tc = ((0,) * pconfig.sym.NSYM,), Dc=(1,))  # initialization with random tensors 
 
-    tmp = _ctmrg(psi, env, max_sweeps, iterator_step, AAb_mode, fix_signs, opts_svd)
+    tmp = _ctmrg(psi, env, max_sweeps, iterator_step, AAb_mode, fix_signs, opts_svd, flag)
     return tmp if iterator_step else next(tmp)
 
 
-def _ctmrg(psi, env, max_sweeps, iterator_step, AAb_mode, fix_signs, opts_svd=None):
+def _ctmrg(psi, env, max_sweeps, iterator_step, AAb_mode, fix_signs, opts_svd=None, flag=None):
 
     """ Generator for ctmrg(). """
-    psi = check_consistency_tensors(psi) # to check if A has the desired fused form of legs i.e. t l b r [s a]
+    psi = check_consistency_tensors(psi, flag) # to check if A has the desired fused form of legs i.e. t l b r [s a]
 
     AAb = CtmEnv(psi)
 
@@ -93,7 +93,7 @@ def _ctmrg(psi, env, max_sweeps, iterator_step, AAb_mode, fix_signs, opts_svd=No
         t_start = time.time()
         env, proj = CTM_it(env, AAb, fix_signs, opts_svd)
         t_end = time.time()
-        tt = t_start - t_end
+        tt = t_end - t_start
         logging.info('sweep time: %0.2f s.', tt)
 
 

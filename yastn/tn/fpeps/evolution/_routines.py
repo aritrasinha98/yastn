@@ -10,7 +10,7 @@ from yastn.tn.fpeps.operators.gates import trivial_tensor, match_ancilla_1s, mat
 from yastn import tensordot, vdot, svd_with_truncation, svd, qr, ncon, eigh_with_truncation
 from ._ntu import env_NTU
 
-def evol_machine(peps, gate, truncation_mode, step, env_type, opts_svd=None):
+def evol_machine(peps, gate, truncation_mode, step, env_type, opts_svd=None, flag=None):
 
     r"""
     Applies a nearest-neighbor gate to a PEPS tensor and optimizes the resulting tensor using alternate
@@ -50,7 +50,7 @@ def evol_machine(peps, gate, truncation_mode, step, env_type, opts_svd=None):
     if opts_svd is None:
         opts_svd = {'D_total':10, 'tol_block':1e-15}  # D_total = 10 chosen arbitrarily
 
-    QA, QB, RA, RB = apply_nn_gate(peps, gate)
+    QA, QB, RA, RB = apply_nn_gate_(peps, gate, flag)
 
     if step == "svd-update":
         MA, MB = truncation_step(RA, RB, opts_svd=opts_svd, normalize=True)
@@ -82,46 +82,116 @@ def evol_machine(peps, gate, truncation_mode, step, env_type, opts_svd=None):
 ##### gate application  ####
 ############################
 
-def apply_local_gate_(peps, gate):
+def apply_local_gate_(peps, gate, flag=None):
     """ apply local gates on PEPS tensors """
-    A = match_ancilla_1s(gate.A, peps[gate.site]) 
-    peps[gate.site] = tensordot(peps[gate.site], A, axes=(2, 1)) # [t l] [b r] [s a]
+
+    print(gate.site)
+
+    target_site = (round((peps.Nx-1)*0.5), round((peps.Ny-1)*0.5)) # center of an odd x odd lattice
+    
+    if gate.site != target_site:
+        A = match_ancilla_1s(gate.A, peps[gate.site])
+        peps[gate.site] = tensordot(peps[gate.site], A, axes=(2, 1)) # [t l] [b r] [s a]
+    elif gate.site == target_site: # target site can have a string attached to ancilla when hole is created at the center
+        if flag == 'hole':
+            peps[gate.site] = peps[gate.site].unfuse_legs(axes=2).unfuse_legs(axes=3)  # [t l] [b r] s a str
+            peps[gate.site] = peps[gate.site].fuse_legs(axes=(0, 1, (2, 3), 4)).fuse_legs(axes=(0, 1, 3, 2)) # [t l] [b r] str [s a]
+            A = match_ancilla_1s(gate.A, peps[gate.site])
+            peps[gate.site] = tensordot(peps[gate.site], A, axes=(3, 1))
+            peps[gate.site] = peps[gate.site].fuse_legs(axes=(0, 1, 3, 2)).unfuse_legs(axes=(2)).fuse_legs(axes=(0, 1, 2, (3, 4))).fuse_legs(axes=(0, 1, (2, 3))) # [t l] [b r] [s [a string]]
+        else:
+            A = match_ancilla_1s(gate.A, peps[gate.site])
+            peps[gate.site] = tensordot(peps[gate.site], A, axes=(2, 1)) # [t l] [b r] [s a]
+
     return peps
+    
 
-
-def apply_nn_gate(peps, gate):
+def apply_nn_gate_(peps, gate, flag):
 
     """ apply nn gates on PEPS tensors. """
-    A, B = peps[gate.bond.site_0], peps[gate.bond.site_1]  # A = [t l] [b r] s
 
+    target_site = (round((peps.Nx-1)*0.5), round((peps.Ny-1)*0.5)) # center of an odd x odd lattice
+    A, B = peps[gate.bond.site_0], peps[gate.bond.site_1]  # A = [t l] [b r] s
+    
     dirn = gate.bond.dirn
-    if dirn == "h":  # Horizontal gate
-        GA_an = match_ancilla_2s(gate.A, A, dir='l') 
-        int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
+    if dirn == "h":  # Horizontal Gate        
+        if gate.bond.site_0 != target_site:
+            GA_an = match_ancilla_2s(gate.A, A, dir='l') 
+            int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
+        elif gate.bond.site_0 == target_site:
+            if flag == 'hole':
+                A =  A.unfuse_legs(axes=2).unfuse_legs(axes=3) # [t l] [b r] s a str 
+                A =  A.fuse_legs(axes=(0, 1, (2, 3), 4)).fuse_legs(axes=(0, 1, 3, 2)) # [t l] [b r] str [s a]
+                GA_an = match_ancilla_2s(gate.A, A, dir='l')
+                A = tensordot(A, GA_an, axes=(3, 1)) # [t l] [b r] str [s a] c 
+                A = A.unfuse_legs(axes=3) # [t l] [b r] str s a c
+                A = A.fuse_legs(axes=(0, 1, 3, (4, 2), 5)) # [t l] [b r] s [a str] c
+                int_A = A.fuse_legs(axes=(0, 1, (2, 3), 4)) # [t l] [b r] [s [a str]] c
+            else:
+                GA_an = match_ancilla_2s(gate.A, A, dir='l') 
+                int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
         int_A = int_A.fuse_legs(axes=((0, 2), 1, 3))  # [[t l] s] [b r] c
         int_A = int_A.unfuse_legs(axes=1)  # [[t l] s] b r c
         int_A = int_A.swap_gate(axes=(1, 3))  # b X c
         int_A = int_A.fuse_legs(axes=((0, 1), (2, 3)))  # [[[t l] s] b] [r c]
         QA, RA = qr(int_A, axes=(0, 1), sQ=-1)  # [[[t l] s] b] rr @ rr [r c]
 
-        GB_an = match_ancilla_2s(gate.B, B, dir='r')
-        int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
+        if gate.bond.site_1 != target_site:
+            GB_an = match_ancilla_2s(gate.B, B, dir='r')
+            int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
+        elif gate.bond.site_1 == target_site:
+            if flag == 'hole':
+                B =  B.unfuse_legs(axes=2).unfuse_legs(axes=3) # [t l] [b r] s a str 
+                B =  B.fuse_legs(axes=(0, 1, (2, 3), 4)).fuse_legs(axes=(0, 1, 3, 2)) # [t l] [b r] str [s a]
+                GB_an = match_ancilla_2s(gate.B, B, dir='r')
+                B = tensordot(B, GB_an, axes=(3, 1)) # [t l] [b r] str [s a] c 
+                B = B.unfuse_legs(axes=3) # [t l] [b r] str s a c
+                B = B.fuse_legs(axes=(0, 1, 3, (4, 2), 5)) # [t l] [b r] s [a str] c
+                int_B = B.fuse_legs(axes=(0, 1, (2, 3), 4)) # [t l] [b r] [s [a str]] c
+            else:
+                GB_an = match_ancilla_2s(gate.B, B, dir='r')
+                int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
         int_B = int_B.fuse_legs(axes=(0, (1, 2), 3))  # [t l] [[b r] s] c
         int_B = int_B.unfuse_legs(axes=0)  # t l [[b r] s] c
         int_B = int_B.fuse_legs(axes=((0, 2), (1, 3)))  # [t [[b r] s]] [l c]
         QB, RB = qr(int_B, axes=(0, 1), sQ=1, Qaxis=0, Raxis=-1)  # ll [t [[b r] s]]  @  [l c] ll       
 
-    elif dirn == "v":  # Vertical gate
-            
-        GA_an = match_ancilla_2s(gate.A, A, dir='l') 
-        int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
+    elif dirn == "v":  # Vertical Gate
+        if gate.bond.site_0 != target_site:
+            GA_an = match_ancilla_2s(gate.A, A, dir='l') 
+            int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
+        elif gate.bond.site_0 == target_site:
+            if flag == 'hole':
+                A =  A.unfuse_legs(axes=2).unfuse_legs(axes=3) # [t l] [b r] s a str 
+                A =  A.fuse_legs(axes=(0, 1, (2, 3), 4)).fuse_legs(axes=(0, 1, 3, 2)) # [t l] [b r] str [s a]
+                GA_an = match_ancilla_2s(gate.A, A, dir='l')
+                A = tensordot(A, GA_an, axes=(3, 1)) # [t l] [b r] str [s a] c 
+                A = A.unfuse_legs(axes=3) # [t l] [b r] str s a c
+                A = A.fuse_legs(axes=(0, 1, 3, (4, 2), 5)) # [t l] [b r] s [a str] c
+                int_A = A.fuse_legs(axes=(0, 1, (2, 3), 4)) # [t l] [b r] [s [a str]] c
+            else:
+                GA_an = match_ancilla_2s(gate.A, A, dir='l') 
+                int_A = tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
         int_A = int_A.fuse_legs(axes=((0, 2), 1, 3))  # [[t l] s] [b r] c
         int_A = int_A.unfuse_legs(axes=1)  # [[t l] s] b r c
         int_A = int_A.fuse_legs(axes=((0, 2), (1, 3)))  # [[[t l] s] r] [b c]
         QA, RA = qr(int_A, axes=(0, 1), sQ=1)  # [[[t l] s] r] bb  @  bb [b c]
 
-        GB_an = match_ancilla_2s(gate.B, B, dir='r')
-        int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
+        if gate.bond.site_1 != target_site:
+            GB_an = match_ancilla_2s(gate.B, B, dir='r')
+            int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
+        elif gate.bond.site_1 == target_site:
+            if flag == 'hole':
+                B =  B.unfuse_legs(axes=2).unfuse_legs(axes=3) # [t l] [b r] s a str 
+                B =  B.fuse_legs(axes=(0, 1, (2, 3), 4)).fuse_legs(axes=(0, 1, 3, 2)) # [t l] [b r] str [s a]
+                GB_an = match_ancilla_2s(gate.B, B, dir='r')
+                B = tensordot(B, GB_an, axes=(3, 1)) # [t l] [b r] str [s a] c 
+                B = B.unfuse_legs(axes=3) # [t l] [b r] str s a c
+                B = B.fuse_legs(axes=(0, 1, 3, (4, 2), 5)) # [t l] [b r] s [a str] c
+                int_B = B.fuse_legs(axes=(0, 1, (2, 3), 4)) # [t l] [b r] [s [a str]] c
+            else:
+                GB_an = match_ancilla_2s(gate.B, B, dir='r')
+                int_B = tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
         int_B = int_B.fuse_legs(axes=(0, (1, 2), 3))  # [t l] [[b r] s] c
         int_B = int_B.unfuse_legs(axes=0)  # t l [[b r] s] c
         int_B = int_B.swap_gate(axes=(1, 3))  # l X c

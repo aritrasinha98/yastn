@@ -4,7 +4,7 @@ from ._ctm_observable_routines import ret_AAbs, hor_extension, ver_extension, ap
 import yastn
 import numpy as np
 
-def nn_avg(peps, env, op):
+def nn_avg(peps, env, op, flag=None):
 
     r"""
     Calculate two-site nearest-neighbor calculation of observables with CTM environments.
@@ -28,7 +28,7 @@ def nn_avg(peps, env, op):
         dictionary containing name of the vertical observables as keys and their averaged values over all vertical bonds.
     """
 
-    peps = check_consistency_tensors(peps)
+    peps = check_consistency_tensors(peps, flag)
     obs_hor = {}
     obs_ver = {}
     for ms in op.keys():
@@ -114,7 +114,7 @@ def measure_one_site_spin(A, ms, env, op=None):
     return hor
 
 
-def one_site_avg(peps, env, op):
+def one_site_avg(peps, env, op,flag=None):
     r"""
     Measures the expectation value of single site operators all over the lattice.
 
@@ -137,8 +137,7 @@ def one_site_avg(peps, env, op):
 
     mat = np.zeros((peps.Nx, peps.Ny))  # output returns the expectation value on every site
 
-    target_site = (round((peps.Nx-1)*0.5), round((peps.Ny-1)*0.5))
-    peps = check_consistency_tensors(peps)
+    peps = check_consistency_tensors(peps, flag)
     s = 0
 
     if peps.lattice == 'checkerboard':
@@ -146,7 +145,7 @@ def one_site_avg(peps, env, op):
     else:
         lists = peps.sites()
     
-    one_site_exp = np.zeros(len(lists))
+    one_site_exp = np.zeros((len(lists)), dype=np.complex)
 
     for ms in lists:
         Am = peps[ms]
@@ -158,4 +157,5 @@ def one_site_avg(peps, env, op):
     mean_one_site = np.mean(one_site_exp)
 
     return mean_one_site, mat
+       
        
