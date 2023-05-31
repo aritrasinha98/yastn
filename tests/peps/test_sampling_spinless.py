@@ -93,7 +93,7 @@ def not_working_test_sampling_spinless():
     ##### (2,0) (2,1) (2,2) #######
     ###############################
 
-    phi = psi.boundary_mps()   # creates the left bondary vector from the PEPS
+    """phi = psi.boundary_mps()   # creates the left bondary vector from the PEPS
     opts = {'D_total': chi}
 
     for r_index in range(net.Ny-1,-1,-1):
@@ -107,8 +107,9 @@ def not_working_test_sampling_spinless():
         phi0 = phi.copy()
         Os = psi.mpo(index=r_index, index_type='column') # converts the rth column of Double PEPS into an MPO to be applied on 
                                                      # the right boundary vector at r_index to form a boundary vector at (r_index-1)
+
         phi = mps.zipper(Os, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.compression_(phi, (Os, phi), method='1site', max_sweeps=2)
+        mps.compression_(phi, (Os, phi0), method='1site', max_sweeps=2)"""
 
     nn, hh = fcdag @ fc, fc @ fcdag
     projectors = [nn, hh]
