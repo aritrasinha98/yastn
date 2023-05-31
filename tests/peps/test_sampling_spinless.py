@@ -86,16 +86,14 @@ def not_working_test_sampling_spinless():
             break # here break if the relative differnece is below tolerance
         cf_energy_old = cf_energy
 
-
-    ###  we try to find out the right boundary vector of the left-most column or 0th row
     ########## 3x3 lattice ########
     ###############################
-    ##### (0,0) (1,0) (2,0) #######
-    ##### (0,1) (1,1) (2,1) #######
-    ##### (0,2) (1,2) (2,2) #######
+    ##### (0,0) (0,1) (0,2) #######
+    ##### (1,0) (1,1) (1,2) #######
+    ##### (2,0) (2,1) (2,2) #######
     ###############################
 
-    phi = psi.boundary_mps()
+    phi = psi.boundary_mps()   # creates the left bondary vector from the PEPS
     opts = {'D_total': chi}
 
     for r_index in range(net.Ny-1,-1,-1):
@@ -107,9 +105,10 @@ def not_working_test_sampling_spinless():
         assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-8) == 1.0
 
         phi0 = phi.copy()
-        O = psi.mpo(index=r_index, index_type='column')
-        phi = mps.zipper(O, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.variational_(phi, O, phi0, method='1site', max_sweeps=2)
+        Os = psi.mpo(index=r_index, index_type='column') # converts the rth column of Double PEPS into an MPO to be applied on 
+                                                     # the right boundary vector at r_index to form a boundary vector at (r_index-1)
+        phi = mps.zipper(Os, phi0, opts)  # right boundary of (r_index-1) th column through zipper
+        mps.compression_(phi, phi0, method='1site', max_sweeps=2)
 
     nn, hh = fcdag @ fc, fc @ fcdag
     projectors = [nn, hh]
