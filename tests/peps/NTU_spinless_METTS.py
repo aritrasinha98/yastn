@@ -121,17 +121,17 @@ if __name__== '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-L", default='rectangle')     # lattice shape
-    parser.add_argument("-x", type=int, default=4)   # lattice dimension in x-dirn
-    parser.add_argument("-y", type=int, default=4)   # lattice dimension in y-dirn
+    parser.add_argument("-x", type=int, default=3)   # lattice dimension in x-dirn
+    parser.add_argument("-y", type=int, default=3)   # lattice dimension in y-dirn
     parser.add_argument("-B", type=str, default='finite') # boundary
-    parser.add_argument("-p", type=str, default='True') # purifciation can be 'True' or 'False' or 'Time'
+    parser.add_argument("-p", type=str, default='True') # purifciation can be 'True' or 'False' or 'Time'; 'True' in case of METTS
     parser.add_argument("-D", type=int, default=5)            # bond dimension or distribution of virtual legs of peps tensors,  input can be either an 
                                                                # integer representing total bond dimension or a string labeling a sector-wise 
                                                                # distribution of bond dimensions in yastn.fpeps.operators.import_distribution
     parser.add_argument("-S", default='U1')             # symmetry -- Z2xZ2 or U1xU1
     parser.add_argument("-M", type=float, default=0.0)      # chemical potential 
     parser.add_argument("-T", type=float, default=1.0)          # tunelling strength
-    parser.add_argument("-BT", type=float, default=0.1)        # target inverse temperature beta
+    parser.add_argument("-BT", type=float, default=0.025)        # target inverse temperature beta
     parser.add_argument("-DBETA", type=float, default=0.005)      # dbeta
     parser.add_argument("-X", type=int, default=20)        # chi --- environmental bond dimension for CTM
     parser.add_argument("-ITER", type=int, default=10)        # chi --- environmental bond dimension for CTM

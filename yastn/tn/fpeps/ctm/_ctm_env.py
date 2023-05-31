@@ -207,7 +207,7 @@ def sample(state, CTMenv, projectors, opts_svd=None, opts_var=None):
         vRnew = mps.zipper(Os, vR, opts=opts_svd)
         if opts_var is None:
             opts_var = {}
-        mps.variational_(vRnew, Os, vR, method='1site', **opts_var)
+        mps.compression_(vRnew, vR, method='1site', **opts_var)
         vR = vRnew
     return out
 
