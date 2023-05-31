@@ -108,7 +108,7 @@ def not_working_test_sampling_spinless():
         Os = psi.mpo(index=r_index, index_type='column') # converts the rth column of Double PEPS into an MPO to be applied on 
                                                      # the right boundary vector at r_index to form a boundary vector at (r_index-1)
         phi = mps.zipper(Os, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.compression_(phi, phi0, method='1site', max_sweeps=2)
+        mps.compression_(phi, (Os, phi), method='1site', max_sweeps=2)
 
     nn, hh = fcdag @ fc, fc @ fcdag
     projectors = [nn, hh]
