@@ -144,7 +144,7 @@ def initialize_Neel_spinfull(fc_up, fc_dn, fcdag_up, fcdag_dn, net):
 
 def initialize_spinless_random(fc, fcdag, net):
     """
-    Initialize a spinless lattice randomly.
+    Initialize a spinless lattice randomly to half-filling.
 
     Parameters
     ----------
@@ -163,8 +163,15 @@ def initialize_spinless_random(fc, fcdag, net):
     hh = fc @ fcdag 
 
     tt = {0: nn, 1: hh}     # filled - 0; vacant - 1
+    total_sites= net.Nx*net.Ny
 
-    lattice = {(i, j): random.randint(0, 1) for i in range(net.Nx) for j in range(net.Ny)}
+    desired_sum = int(np.round(0.5*total_sites))
+    values = [0] * (total_sites - desired_sum) + [1] *  desired_sum
+    random.shuffle(values)
+
+    lattice = {(i, j): values.pop(0) for i in range(net.Nx) for j in range(net.Ny)}
+    print(lattice)
+
 
     gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
     for kk in gamma.sites():
@@ -201,7 +208,7 @@ def initialize_post_sampling_spinless(fc, fcdag, net, out):
 
     nn, hh = fcdag @ fc, fc @ fcdag
 
-    tt = {0: nn, 1: hh}     # filled - 0; vacant - 1
+    tt = {0: hh, 1: nn}     # filled - 0; vacant - 1
    
     gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
     for kk in gamma.sites():
