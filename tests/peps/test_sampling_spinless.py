@@ -26,8 +26,8 @@ def not_working_test_sampling_spinless():
     lattice = 'rectangle'
     boundary = 'finite'
     purification = 'True'
-    xx = 3
-    yy = 3
+    xx = 4
+    yy = 4
     Ds = 5
     chi = 10
     mu = 0 # chemical potential

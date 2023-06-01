@@ -6,7 +6,7 @@ import yastn.tn.fpeps as peps
 import time
 from yastn.tn.fpeps.operators.gates import gates_hopping, gate_local_Hubbard
 from yastn.tn.fpeps.evolution import evolution_step_, gates_homogeneous
-from yastn.tn.fpeps import initialize_spinful_random, initialize_Neel_spinful
+from yastn.tn.fpeps import initialize_spinful_random, initialize_Neel_spinful, initialize_post_sampling_spinful
 from yastn.tn.fpeps.ctm import sample, nn_avg, ctmrg, one_site_avg
 
 try:
@@ -24,7 +24,6 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu_up
     n_up = fcdag_up @ fc_up
     n_dn = fcdag_dn @ fc_dn
     n_int = n_up @ n_dn
-
 
     psi = initialize_Neel_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net)
     GA_nn_up, GB_nn_up = gates_hopping(t_up, dbeta, fid, fc_up, fcdag_up, purification=purification)
@@ -45,7 +44,6 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu_up
         for num in range(num_steps):
 
             beta = (num+1)*dbeta
-            sv_beta = int(beta * yastn.BETA_MULTIPLIER)
             logging.info("beta = %0.3f" % beta)
             psi, info =  evolution_step_(psi, gates, step, tr_mode, env_type='NTU', opts_svd=opts_svd_ntu) 
             print(info)
@@ -86,18 +84,25 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu_up
 
         cf_energy_old = 0
 
-        ops = {'cdagc': {'l': fcdag, 'r': fc},
-           'ccdag': {'l': fc, 'r': fcdag}}
+        ops = {'cdagc_up': {'l': fcdag_up, 'r': fc_up},
+           'ccdag_up': {'l': fc_up, 'r': fcdag_up},
+           'cdagc_dn': {'l': fcdag_dn, 'r': fc_dn},
+           'ccdag_dn': {'l': fc_dn, 'r': fcdag_dn}}
 
         for step in ctmrg(psi, max_sweeps, iterator_step=3, AAb_mode=0, opts_svd=opts_svd_ctm):
 
             assert step.sweeps % 3 == 0 # stop every 3rd step as iteration_step=3
             
             obs_hor, obs_ver =  nn_avg(psi, step.env, ops)
-            cdagc = 0.5*(abs(obs_hor.get('cdagc')) + abs(obs_ver.get('cdagc')))
-            ccdag = 0.5*(abs(obs_hor.get('ccdag')) + abs(obs_ver.get('ccdag')))
+            cdagc_up = 0.5*(abs(obs_hor.get('cdagc_up')) + abs(obs_ver.get('cdagc_up')))
+            ccdag_up = 0.5*(abs(obs_hor.get('ccdag_up')) + abs(obs_ver.get('ccdag_up')))
+            cdagc_dn = 0.5*(abs(obs_hor.get('cdagc_dn')) + abs(obs_ver.get('cdagc_dn')))
+            ccdag_dn = 0.5*(abs(obs_hor.get('cdagc_up')) + abs(obs_ver.get('cdagc_up')))
+            
+            mean_int, _ = one_site_avg(psi, step.env, n_int) # first entry of the function gives average of one-site observables of the sites
 
-            cf_energy = - (cdagc + ccdag) * (2 * xx * yy - xx - yy)
+
+            cf_energy =  U * mean_int - (cdagc_up + ccdag_up + cdagc_dn + ccdag_dn) 
 
             print("Energy : ", cf_energy)
             if abs(cf_energy - cf_energy_old) < tol_exp:
@@ -110,15 +115,18 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu_up
 
         with open("energy_spinless_target_beta_%1.1f_%s.txt" % (beta_target,file_name), "a+") as f:
                 f.write('{:.1f} {:.5f}\n'.format(beta, nn_CTM))
-        
-
-        # now we do probabilistic sampling
     
-        nn, hh = fcdag @ fc, fc @ fcdag
-        projectors = [nn, hh]
+        # now we do probabilistic sampling
+        n_up = fcdag_up @ fc_up 
+        n_dn = fcdag_dn @ fc_dn 
+        h_up = fc_up @ fcdag_up 
+        h_dn = fc_dn @ fcdag_dn 
+
+        nn_up, nn_dn, nn_do, nn_hole = n_up @ h_dn, n_dn @ h_up, n_up @ n_dn, h_up @ h_dn
+        projectors = [nn_up, nn_dn, nn_do, nn_hole]
         out = sample(psi, step.env, projectors)
 
-        psi = initialize_post_sampling_spinless(fc, fcdag, net, out)
+        psi = initialize_post_sampling_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net, out)
 
 
 if __name__== '__main__':

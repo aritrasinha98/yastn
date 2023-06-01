@@ -36,11 +36,11 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu, t
     opts_svd_ntu = {'D_total': D, 'tol_block': 1e-15}
 
     for itr in range(num_iter):
+        print(itr)
 
         for num in range(num_steps):
 
             beta = (num+1)*dbeta
-            sv_beta = int(beta * yastn.BETA_MULTIPLIER)
             logging.info("beta = %0.3f" % beta)
             psi, info =  evolution_step_(psi, gates, step, tr_mode, env_type='NTU', opts_svd=opts_svd_ntu) 
             print(info)
@@ -52,25 +52,21 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu, t
 
             if step=='svd-update':
                 continue
-            ntu_error_up = np.mean(np.sqrt(info['ntu_error'][::2]))
-            ntu_error_dn = np.mean(np.sqrt(info['ntu_error'][1::2]))
-            logging.info('ntu error up: %.2e' % ntu_error_up)
-            logging.info('ntu error dn: %.2e' % ntu_error_dn)
+            ntu_error = np.mean(np.sqrt(info['ntu_error'][::]))
+            logging.info('ntu error : %.2e' % ntu_error)
 
-            svd_error_up = np.mean(np.sqrt(info['svd_error'][::2]))
-            svd_error_dn = np.mean(np.sqrt(info['svd_error'][1::2]))
-            logging.info('svd error up: %.2e' % svd_error_up)
-            logging.info('svd error dn: %.2e' % svd_error_dn)
+            svd_error = np.mean(np.sqrt(info['svd_error'][::]))
+            logging.info('svd error : %.2e' % svd_error)
 
             with open("NTU_error_ground_state_%s.txt" % file_name, "a+") as f:
-                f.write('{:.3f} {:.3e} {:.3e}\n'.format(beta, ntu_error_up, ntu_error_dn))
+                f.write('{:.3f} {:.3e} \n'.format(beta, ntu_error))
             with open("SVD_error_ground_state_%s.txt" % file_name, "a+") as f:
-                f.write('{:.3f} {:.3e} {:.3e} \n'.format(beta, svd_error_up, svd_error_dn))
+                f.write('{:.3f} {:.3e} \n'.format(beta, svd_error))
 
         # save the tensor at target beta
         x = {itr: psi[ms].save_to_dict() for ms in psi.sites()}
         mdata.update(x)
-        np.save("METTS_fermi_sea_spinless_tensors_target_beta_%1.1f_%s.npy" % (beta_target, file_name), mdata)
+        np.save("METTS_Hubbard_spinful_tensors_target_beta_%1.2f_%s.npy" % (beta_target, file_name), mdata)
 
         # calculate observables with ctm 
 
@@ -103,8 +99,8 @@ def benchmark_NTU_hubbard(lattice, boundary, purification, xx, yy, D, sym, mu, t
 
         nn_CTM = 0.5 * (abs(ob_hor.get('cdagc')) + abs(ob_ver.get('ccdag')))
 
-        with open("energy_spinless_target_beta_%1.1f_%s.txt" % (beta_target,file_name), "a+") as f:
-                f.write('{:.1f} {:.5f}\n'.format(beta, nn_CTM))
+        with open("energy_spinless_target_beta_%1.2f_%s.txt" % (beta_target,file_name), "a+") as f:
+                f.write('{:.0f} {:.5f}\n'.format(itr, nn_CTM))
         
 
         # now we do probabilistic sampling
@@ -125,15 +121,15 @@ if __name__== '__main__':
     parser.add_argument("-y", type=int, default=3)   # lattice dimension in y-dirn
     parser.add_argument("-B", type=str, default='finite') # boundary
     parser.add_argument("-p", type=str, default='True') # purifciation can be 'True' or 'False' or 'Time'; 'True' in case of METTS
-    parser.add_argument("-D", type=int, default=5)            # bond dimension or distribution of virtual legs of peps tensors,  input can be either an 
+    parser.add_argument("-D", type=int, default=2)            # bond dimension or distribution of virtual legs of peps tensors,  input can be either an 
                                                                # integer representing total bond dimension or a string labeling a sector-wise 
                                                                # distribution of bond dimensions in yastn.fpeps.operators.import_distribution
     parser.add_argument("-S", default='U1')             # symmetry -- Z2xZ2 or U1xU1
     parser.add_argument("-M", type=float, default=0.0)      # chemical potential 
     parser.add_argument("-T", type=float, default=1.0)          # tunelling strength
-    parser.add_argument("-BT", type=float, default=0.025)        # target inverse temperature beta
-    parser.add_argument("-DBETA", type=float, default=0.005)      # dbeta
-    parser.add_argument("-X", type=int, default=20)        # chi --- environmental bond dimension for CTM
+    parser.add_argument("-BT", type=float, default=0.1)        # target inverse temperature beta
+    parser.add_argument("-DBETA", type=float, default=0.01)      # dbeta
+    parser.add_argument("-X", type=int, default=8)        # chi --- environmental bond dimension for CTM
     parser.add_argument("-ITER", type=int, default=10)        # chi --- environmental bond dimension for CTM
     parser.add_argument("-STEP", default='two-step')           # truncation can be done in 'one-step' or 'two-step'. note that truncations done 
                                                                # with svd update or when we fix the symmetry sectors are always 'one-step'

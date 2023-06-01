@@ -171,14 +171,16 @@ def sample(state, CTMenv, projectors, opts_svd=None, opts_var=None):
 
     out = {}
     count = 0
-    vR = CtmEnv2Mps(state, CTMenv, index=state.Ny-1, index_type='r')
+    vR = CtmEnv2Mps(state, CTMenv, index=state.Ny-1, index_type='r') # right boundary of indexed column through CTM environment tensors
 
     for ny in range(state.Ny - 1, -1, -1):
 
-        Os = state.mpo(index=ny, index_type='column')
-        vL = CtmEnv2Mps(state, CTMenv, index=ny, index_type='l').conj()
+        Os = state.mpo(index=ny, index_type='column') # converts ny colum of PEPS to MPO
+        vL = CtmEnv2Mps(state, CTMenv, index=ny, index_type='l').conj() # left boundary of indexed column through CTM environment tensors
 
-        env = mps.Env3(vL, Os, vR).setup(to = 'first')
+        
+
+        env = mps.Env3(vL, Os, vR).setup(to = 'first') 
 
         for nx in range(0, state.Nx):
             dpt = Os[nx].copy()
@@ -197,16 +199,18 @@ def sample(state, CTMenv, projectors, opts_svd=None, opts_var=None):
             ind = sum(apr < rand for apr in accumulate(prob))
             out[(nx, ny)] = ind
             dpt.A = tensordot(dpt.A, loc_projectors[ind], axes=(4, 1))
-            Os[nx] = dpt
+            Os[nx] = dpt               # updated with the new collapse
             env.update_env(nx, to='last')
             count += 1
-
+        
         if opts_svd is None:
             opts_svd = {'D_total': max(vL.get_bond_dimensions())}
 
         vRnew = mps.zipper(Os, vR, opts=opts_svd)
         if opts_var is None:
             opts_var = {}
+
+
         mps.compression_(vRnew, (Os, vR), method='1site', **opts_var)
         vR = vRnew
     return out
