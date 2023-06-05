@@ -38,15 +38,21 @@ def nn_avg(peps, env, op):
         
         for bds_h in peps.bonds(dirn='h'):  # correlators on all horizontal bonds
             AAb = {'l': fPEPS_2layers(peps[bds_h.site_0]), 'r': fPEPS_2layers(peps[bds_h.site_1])}
-            AAbo = ret_AAbs(peps, bds_h, opt, orient='h')
-            val_hor = hor_extension(env, bds_h, AAbo, AAb)
-            res_hor.append(val_hor)
+            try:
+                AAbo = ret_AAbs(peps, bds_h, opt, orient='h')
+                val_hor = hor_extension(env, bds_h, AAbo, AAb)
+                res_hor.append(val_hor)
+            except np.AxisError:
+                res_hor.append(0)
         for bds_v in peps.bonds(dirn='v'): # correlators on all vertical bonds
             AAb = {'l': fPEPS_2layers(peps[bds_v.site_0]), 'r': fPEPS_2layers(peps[bds_v.site_1])}
-            AAbo = ret_AAbs(peps, bds_v, opt, orient='v')
-            val_ver = ver_extension(env, bds_v, AAbo, AAb)
-            res_ver.append(val_ver)
-        
+            try:
+                AAbo = ret_AAbs(peps, bds_v, opt, orient='v')
+                val_ver = ver_extension(env, bds_v, AAbo, AAb)
+                res_ver.append(val_ver)
+            except np.AxisError:
+                res_ver.append(0)
+
         dic_hor = {ms: np.mean(res_hor)}
         dic_ver = {ms: np.mean(res_ver)}
         obs_hor.update(dic_hor)

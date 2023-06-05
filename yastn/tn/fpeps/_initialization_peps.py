@@ -170,8 +170,6 @@ def initialize_spinless_random(fc, fcdag, net):
     random.shuffle(values)
 
     lattice = {(i, j): values.pop(0) for i in range(net.Nx) for j in range(net.Ny)}
-    print(lattice)
-
 
     gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
     for kk in gamma.sites():

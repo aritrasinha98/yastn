@@ -40,9 +40,9 @@ def correlator(site1, site2, Nx, Ny, t, mu, beta):
 
     return calculate_correlator(x1, y1, x2, y2, W, V, Ny, beta)
 
-Nx, Ny = 3, 3
+Nx, Ny = 2, 2
 t = 1
-beta = 0.1
+beta = 1
 mu = 0
 site1, site2 = (2, 0), (2, 1)
 site3, site4 = (0, 1), (1, 1)

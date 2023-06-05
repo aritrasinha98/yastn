@@ -82,7 +82,7 @@ def test_match_ancilla():
     
     int_A = yastn.tensordot(A, GA_an, axes=(2, 1)) # [t l] [b r] s c
     int_B = yastn.tensordot(B, GB_an, axes=(2, 1)) # [t l] [b r] s c
-    assert(list(int_A.unfuse_legs(axes=2).get_leg_structure(axis=2).keys())==[(0,0,0)]) # checking if the central site has up-spin fermion trasferred
+    assert(list(int_A.unfuse_legs(axes=2).get_leg_structure(axis=2).keys())==[(0,0,0)]) # checking if the central site has up-spin fermion transferred
     assert(list(int_B.unfuse_legs(axes=2).get_leg_structure(axis=2).keys())==[(1,1,0)]) # to the site to the right
 
 

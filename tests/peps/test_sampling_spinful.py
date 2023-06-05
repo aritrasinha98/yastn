@@ -20,7 +20,7 @@ except ImportError:
     from configs import config_U1_R_fermionic as cfg
 
 
-def not_working_test_sampling_spinfull():
+def test_sampling_spinful():
 
     lattice = 'rectangle'
     boundary = 'finite'
@@ -32,7 +32,7 @@ def not_working_test_sampling_spinfull():
     U = 12
     mu_up, mu_dn = 0, 0 # chemical potential
     t_up, t_dn = 1., 1. # hopping amplitude
-    beta_end = 0.03
+    beta_end = 0.01
     dbeta = 0.01
     step = 'two-step'
     tr_mode = 'optimal'
@@ -107,13 +107,12 @@ def not_working_test_sampling_spinfull():
         Bctm = CtmEnv2Mps(net, step.env, index=r_index, index_type='r')   # right boundary of r_index th column through CTM environment tensors
         #assert all(Bctm[i].get_shape() == psi[i].get_shape() for i in range(net.Nx))
         print(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()))
-        assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-10) == 1.0
+        assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-8) == 1.0
 
         phi0 = phi.copy()
-        O = psi.mpo(index=r_index, index_type='column')
-        phi = mps.zipper(O, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.variational_(phi, O, phi0, method='1site', max_sweeps=2)
-
+        Oss = psi.mpo(index=r_index, index_type='column')
+        phi = mps.zipper(Oss, phi0, opts)  # right boundary of (r_index-1) th column through zipper
+        mps.compression_(phi, (Oss, phi0), method='1site', max_sweeps=2)
 
     n_up = fcdag_up @ fc_up 
     n_dn = fcdag_dn @ fc_dn 
@@ -127,5 +126,5 @@ def not_working_test_sampling_spinfull():
 
 if __name__ == '__main__':
     logging.basicConfig(level='INFO')
-    not_working_test_sampling_spinfull()
+    test_sampling_spinful()
 

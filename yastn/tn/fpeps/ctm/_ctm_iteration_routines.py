@@ -716,6 +716,7 @@ def fuse_ancilla_ws(op, fid, dirn):
     return op
 
 def fPEPS_2layers(A, B=None, op=None, dir=None):
+
     """ 
     Prepare top and bottom peps tensors for CTM procedures.
     Applies operators on top if provided, with dir = 'l', 'r', 't', 'b', '1s'
