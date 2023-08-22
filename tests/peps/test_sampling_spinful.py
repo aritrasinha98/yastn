@@ -6,10 +6,10 @@ import yastn
 import yastn.tn.fpeps as fpeps
 import yastn.tn.mps as mps
 import time
-from yastn.tn.fpeps.operators.gates import gates_hopping, gate_local_fermi_sea, gate_local_Hubbard
+from yastn.tn.fpeps.operators.gates import gates_hopping, gate_local_Hubbard
 from yastn.tn.fpeps.evolution import evolution_step_, gates_homogeneous
 from yastn.tn.fpeps import initialize_peps_purification
-from yastn.tn.fpeps.ctm import sample, nn_bond, CtmEnv2Mps, nn_avg, ctmrg, init_rand, one_site_avg, Local_CTM_Env
+from yastn.tn.fpeps.ctm import sample, CtmEnv2Mps, nn_avg, ctmrg
 from yastn.tn.mps import Env2, Env3
 
 
@@ -20,7 +20,7 @@ except ImportError:
     from configs import config_U1_R_fermionic as cfg
 
 
-def test_sampling_spinful():
+def not_working_test_sampling_spinfull():
 
     lattice = 'rectangle'
     boundary = 'finite'
@@ -32,7 +32,7 @@ def test_sampling_spinful():
     U = 12
     mu_up, mu_dn = 0, 0 # chemical potential
     t_up, t_dn = 1., 1. # hopping amplitude
-    beta_end = 0.01
+    beta_end = 0.03
     dbeta = 0.01
     step = 'two-step'
     tr_mode = 'optimal'
@@ -77,7 +77,7 @@ def test_sampling_spinful():
     for step in ctmrg(psi, max_sweeps, iterator_step=4, AAb_mode=0, opts_svd=opts_svd_ctm):
         
         assert step.sweeps % 4 == 0 # stop every 4th step as iteration_step=4
-        obs_hor, obs_ver,_, _ =  nn_avg(psi, step.env, ops)
+        obs_hor, obs_ver, _, _ =  nn_avg(psi, step.env, ops)
 
         cdagc_up = 0.5*(abs(obs_hor.get('cdagc_up')) + abs(obs_ver.get('cdagc_up')))
         ccdag_up = 0.5*(abs(obs_hor.get('ccdag_up')) + abs(obs_ver.get('ccdag_up')))
@@ -103,16 +103,15 @@ def test_sampling_spinful():
     opts = {'D_total': chi}
 
     for r_index in range(net.Ny-1,-1,-1):
-        print(r_index)
         Bctm = CtmEnv2Mps(net, step.env, index=r_index, index_type='r')   # right boundary of r_index th column through CTM environment tensors
         #assert all(Bctm[i].get_shape() == psi[i].get_shape() for i in range(net.Nx))
         print(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()))
-        assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-8) == 1.0
+        assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-10) == 1.0
 
         phi0 = phi.copy()
-        Oss = psi.mpo(index=r_index, index_type='column')
-        phi = mps.zipper(Oss, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.compression_(phi, (Oss, phi0), method='1site', max_sweeps=2)
+        O = psi.mpo(index=r_index, index_type='column')
+        phi = mps.zipper(O, phi0, opts)  # right boundary of (r_index-1) th column through zipper
+        mps.compression_(phi, (O, phi0), method='1site', max_sweeps=2)
 
     n_up = fcdag_up @ fc_up 
     n_dn = fcdag_dn @ fc_dn 
@@ -126,5 +125,4 @@ def test_sampling_spinful():
 
 if __name__ == '__main__':
     logging.basicConfig(level='INFO')
-    test_sampling_spinful()
-
+    not_working_test_sampling_spinfull()

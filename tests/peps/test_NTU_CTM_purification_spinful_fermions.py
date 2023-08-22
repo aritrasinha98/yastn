@@ -84,7 +84,7 @@ def test_NTU_spinfull_finite():
 
         doc, _ = one_site_avg(psi, step.env, n_int) # first entry of the function gives average of one-site observables of the sites
 
-        obs_hor, obs_ver =  nn_avg(psi, step.env, ops)
+        obs_hor, obs_ver, _,_ =  nn_avg(psi, step.env, ops)
 
         cdagc_up = 0.5*(abs(obs_hor.get('cdagc_up')) + abs(obs_ver.get('cdagc_up')))
         ccdag_up = 0.5*(abs(obs_hor.get('ccdag_up')) + abs(obs_ver.get('ccdag_up')))
@@ -192,7 +192,7 @@ def test_NTU_spinfull_infinite():
             break # here break if the relative differnece is below tolerance
         cf_energy_old = cf_energy
 
-    ob_hor, ob_ver = nn_avg(psi, step.env, ops)
+    ob_hor, ob_ver, _, _ = nn_avg(psi, step.env, ops)
 
     nn_CTM = 0.25 * (abs(ob_hor.get('cdagc_up')) + abs(ob_ver.get('ccdag_up'))+ abs(ob_ver.get('cdagc_dn'))+ abs(ob_ver.get('ccdag_dn')))
     print(nn_CTM)
