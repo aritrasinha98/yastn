@@ -1,6 +1,6 @@
 from ._ctm_iteration_routines import check_consistency_tensors
 from ._ctm_iteration_routines import fPEPS_2layers
-from ._ctm_observable_routines import ret_AAbs, hor_extension, ver_extension, apply_TMO_left, con_bi
+from ._ctm_observable_routines import apply_TMO_left, con_bi, array_EV2pt
 import yastn
 import numpy as np
 
@@ -29,30 +29,32 @@ def nn_avg(peps, env, op):
     """
 
     peps = check_consistency_tensors(peps)
-    obs_hor = {}
-    obs_ver = {}
+    obs_hor_mean = {}
+    obs_ver_mean = {}
+    obs_hor_sum = {}
+    obs_ver_sum = {}
     for ms in op.keys():
         res_hor = []
         res_ver = []
         opt = op.get(ms)
-        
         for bds_h in peps.bonds(dirn='h'):  # correlators on all horizontal bonds
-            AAb = {'l': fPEPS_2layers(peps[bds_h.site_0]), 'r': fPEPS_2layers(peps[bds_h.site_1])}
-            AAbo = ret_AAbs(peps, bds_h, opt, orient='h')
-            val_hor = hor_extension(env, bds_h, AAbo, AAb)
-            res_hor.append(val_hor)
+            val_hor = EV2ptcorr(peps, env, opt, bds_h.site_0, bds_h.site_1)
+            res_hor.append(val_hor[0])
         for bds_v in peps.bonds(dirn='v'): # correlators on all vertical bonds
-            AAb = {'l': fPEPS_2layers(peps[bds_v.site_0]), 'r': fPEPS_2layers(peps[bds_v.site_1])}
-            AAbo = ret_AAbs(peps, bds_v, opt, orient='v')
-            val_ver = ver_extension(env, bds_v, AAbo, AAb)
-            res_ver.append(val_ver)
+            val_ver = EV2ptcorr(peps, env, opt, bds_v.site_0, bds_v.site_1)
+            res_ver.append(val_ver[0])
         
-        dic_hor = {ms: np.mean(res_hor)}
-        dic_ver = {ms: np.mean(res_ver)}
-        obs_hor.update(dic_hor)
-        obs_ver.update(dic_ver)
+        dic_hor_mean = {ms: np.mean(res_hor)}
+        dic_ver_mean = {ms: np.mean(res_ver)}
+        dic_hor_sum = {ms: np.sum(res_hor)}
+        dic_ver_sum = {ms: np.sum(res_ver)}
+        obs_hor_mean.update(dic_hor_mean)
+        obs_ver_mean.update(dic_ver_mean)
+        obs_hor_sum.update(dic_hor_sum)
+        obs_ver_sum.update(dic_ver_sum)
 
-    return obs_hor, obs_ver
+    return obs_hor_mean, obs_ver_mean, obs_hor_sum, obs_ver_sum
+
 
 
 def nn_bond(peps, env, op, bd):
@@ -79,10 +81,7 @@ def nn_bond(peps, env, op, bd):
     """
 
     peps = check_consistency_tensors(peps) 
-
-    AAbo = ret_AAbs(peps, bd, op, orient=bd.dirn)
-    AAb = {'l': fPEPS_2layers(peps[bd.site_0]), 'r': fPEPS_2layers(peps[bd.site_1])}
-    val = hor_extension(env, bd, AAbo, AAb) if bd.dirn == 'h' else ver_extension(env, bd, AAbo, AAb)
+    val = EV2ptcorr(peps, env, op, bd.site_0, bd.site_1)
     return val
 
 def measure_one_site_spin(A, ms, env, op=None):
@@ -137,7 +136,6 @@ def one_site_avg(peps, env, op):
 
     mat = np.zeros((peps.Nx, peps.Ny))  # output returns the expectation value on every site
 
-    target_site = (round((peps.Nx-1)*0.5), round((peps.Ny-1)*0.5))
     peps = check_consistency_tensors(peps)
     s = 0
 
@@ -158,4 +156,89 @@ def one_site_avg(peps, env, op):
     mean_one_site = np.mean(one_site_exp)
 
     return mean_one_site, mat
+
+
+def EV2ptcorr(peps, env, op, site0, site1):
+
+    r"""
+    Returns two-point correlators given any two sites.
+
+    Parameters
+    ----------
+    peps : class Peps
+        class containing peps data along with the lattice structure data
+
+    env: class CtmEnv
+        class containing ctm environment tensors along with lattice structure data
+    
+    op: observable whose two-point correlators need to be calculated
+
+    site0, site1: sites where the two-point correlator is to be calculated
+    """
+
+    x0, y0 = site0
+    x1, y1 = site1
+
+    if (x0-x1) == 0 or (y0-y1) == 0:   # check if axial
+        exp_corr = EV2ptcorr_axial(peps, env, op, site0, site1)
+    elif abs(x0-x1) == 1 and abs(y0-y1) == 1:   # check if diagonal
+        exp_corr = EV2ptcorr_diagonal(peps, env, op, site0, site1)
+
+    return exp_corr
        
+
+def EV2ptcorr_axial(peps, env, op, site0, site1):
+
+    r"""
+    Returns two-point correlators along axial direction (horizontal or vertical) given any two sites and observables
+    to be evaluated on those sites. Directed from EV2ptcorr when sites lie in the axial (horizontal or vertical) direction
+    """
+
+    peps = check_consistency_tensors(peps) # to check if A has the desired fused form of legs i.e. t l b r [s a]
+    norm_array = array_EV2pt(peps, env, site0, site1)
+    op_array = array_EV2pt(peps, env, site0, site1, op)   
+    array_corr = op_array / norm_array
+
+    return array_corr
+
+
+def EV2ptcorr_diagonal(peps, env, op, site0, site1):
+    
+    r"""
+    Returns two-point correlators along diagonal direction given any two sites and observables
+    to be evaluated on those sites. Directed from EV2ptcorr when sites lie diagonally.
+    """
+
+    peps = check_consistency_tensors(peps) # to check if A has the desired fused form of legs i.e. t l b r [s a]
+    norm_array = array_EV2pt(peps, env, site0, site1)
+    op_array = array_EV2pt(peps, env, site0, site1, op)   
+    array_corr = op_array / norm_array
+
+    return array_corr
+
+"""def diagonal()
+
+    AAb_top = {'l': fPEPS_2layers(A[0]), 'r': fPEPS_2layers(A[1])}     # top layer of A tensors without operator
+    AAb_bottom = {'l': fPEPS_2layers(A[1]), 'r': fPEPS_2layers(A[0])}  # bottom layer of A tensors without operator
+    
+    norm_1 = diagonal_correlation(env, indten_tl_1, AAb_top, AAb_bottom, AAb_top, AAb_bottom) # norm with sublattice in [0 1] [1 0] order
+    norm_2 = diagonal_correlation(env, indten_tl_2, AAb_bottom, AAb_top, AAb_bottom, AAb_top) # norm with sublattice in [1 0] [0 1] order
+    print('norm with sublattice in [0 1] [1 0] order: ', norm_1), print('norm with sublattice in [1 0] [0 1] order: ', norm_2)
+    
+    EVcorrs_diag = {}
+    for k, op in ops.items():
+        print(k)
+        AAbop_top = {'l': fPEPS_2layers(A[0], op=op['l'], dir='l'), 'r': fPEPS_2layers(A[1], op=op['r'], dir='r')} # top layer of A tensors with operator
+        AAbop_bottom = {'l': fPEPS_2layers(A[1], op=op['l'], dir='l'), 'r': fPEPS_2layers(A[0], op=op['r'], dir='r')} # bottom layer of A tensors with operator
+        d1_dir1 = diagonal_correlation(env, indten_tl_1, AAb_top, AAb_bottom, AAbop_top, AAbop_bottom, orient='1ws') # diagonal correlation with
+        d1_dir2 = diagonal_correlation(env, indten_tl_1, AAb_top, AAb_bottom, AAbop_top, AAbop_bottom, orient='2ws') # sublattice in [0 1] [1 0] order
+        
+        d2_dir1 = diagonal_correlation(env, indten_tl_2, AAb_bottom, AAb_top, AAbop_bottom, AAbop_top, orient='1ws') # diagonal correlation with 
+        d2_dir2 = diagonal_correlation(env, indten_tl_2, AAb_bottom, AAb_top, AAbop_bottom, AAbop_top, orient='2ws') # sublattice in [1 0] [0 1] order
+
+        print('d01 dirn 1', d1_dir1), print('d10 dirn 1', d2_dir1), print('d01 dirn 2', d1_dir2), print('d10 dirn 2', d2_dir2)
+        exp_diag_dir_1, exp_diag_dir_2 = 0.5*((d1_dir1/norm_1) + (d2_dir1/norm_2)), 0.5*((d1_dir2/norm_1) + (d2_dir2/norm_2))
+
+        EVcorrs_diag[k] = np.mean([exp_diag_dir_1, exp_diag_dir_2])
+    return EVcorrs_diag"""
+

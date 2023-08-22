@@ -109,7 +109,6 @@ class _EnvParent:
             'first' or 'last'.
         """
         for n in self.ket.sweep(to=to):
-            print(n)
             self.update_env(n, to=to)
         return self
 
@@ -463,9 +462,6 @@ def _update3(n, F, bra, op, ket, to, nr_phys, on_aux):
     elif nr_phys == 1 and to == 'first':
         tmp = ket[n] @ F[(n + 1, n)]
         tmp = op[n]._attach_23(tmp)
-        print(tmp.get_shape())
-        print(bra[n].conj().get_shape())
-
         F[(n, n - 1)] = tensor.ncon([tmp, bra[n].conj()], ((-0, -1, 1, 2), (-2, 2, 1)))
     elif nr_phys == 2 and not on_aux and to == 'last':
         bA = bra[n].fuse_legs(axes=(0, 1, (2, 3)))

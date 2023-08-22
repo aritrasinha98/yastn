@@ -142,6 +142,78 @@ def initialize_Neel_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net):
     
     return gamma
 
+
+def initialize_post_sampling_Ising(sid, sz, net, out):
+    """"
+    Initializes the post-sampling state according to the specified occupation pattern in the Ising model.
+
+    Parameters
+    ----------
+    sid : Idenitity operator in spin-1/2 basis.
+    sz : sz operator in spin-1/2 basis.
+    net : class Lattice
+    out : dict
+        A dictionary specifying the occupation pattern. The keys are the lattice sites
+        and the values are integers indicating the occupation type (0 for spin-up, 1 for spin-down).
+
+    Returns
+    -------
+    gamma : Peps object
+        The post-sampling state tensor network.
+    """
+
+    sup, sdn = 0.5*(sid+sz), 0.5*(sid-sz)
+    tt = {0: sup, 1: sdn}     # up - 0; down - 1
+    gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
+    for kk in gamma.sites():
+        Ga = tt[out[kk]].fuse_legs(axes=[(0, 1)])
+        for s in (-1, 1, 1, -1):
+            Ga = Ga.add_leg(axis=0, s=s)
+        gamma[kk] = Ga.fuse_legs(axes=((0, 1), (2, 3), 4))
+        
+    return gamma
+
+
+
+def initialize_dense_random(sid, sz, net):
+    """
+    Initialize random up and down polarized spins in the 2D Ising model.
+
+    Parameters
+    ----------
+    sid : Idenitity operator in spin-1/2 basis.
+    sz : sz operator in spin-1/2 basis.
+    net : class Lattice
+    out : dict
+        A dictionary specifying the occupation pattern. The keys are the lattice sites
+        and the values are integers indicating the occupation type (0 for spin-up, 1 for spin-down).
+
+    Returns
+    -------
+    gamma : Peps object
+        The post-sampling state tensor network.
+    """
+
+    sup, sdn = 0.5*(sid+sz), 0.5*(sid-sz)
+    tt = {0: sup, 1: sdn}     # up - 0; down - 1
+    total_sites= net.Nx*net.Ny
+
+    desired_sum = int(np.round(0.5*total_sites))
+    values = [0] * (total_sites - desired_sum) + [1] *  desired_sum
+    random.shuffle(values)
+
+    lattice = {(i, j): values.pop(0) for i in range(net.Nx) for j in range(net.Ny)}
+
+    gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
+    for kk in gamma.sites():
+        Ga = tt[lattice[kk]].fuse_legs(axes=[(0, 1)])
+        for s in (-1, 1, 1, -1):
+            Ga = Ga.add_leg(axis=0, s=s)
+        gamma[kk] = Ga.fuse_legs(axes=((0, 1), (2, 3), 4))
+        
+    return gamma
+
+
 def initialize_spinless_random(fc, fcdag, net):
     """
     Initialize a spinless lattice randomly to half-filling.
@@ -170,8 +242,6 @@ def initialize_spinless_random(fc, fcdag, net):
     random.shuffle(values)
 
     lattice = {(i, j): values.pop(0) for i in range(net.Nx) for j in range(net.Ny)}
-    print(lattice)
-
 
     gamma = fpeps.Peps(net.lattice, net.dims, net.boundary)
     for kk in gamma.sites():
@@ -258,7 +328,7 @@ def initialize_spinful_random(fc_up, fc_dn, fcdag_up, fcdag_dn, net):
     return gamma
 
 
-def initialize_post_sampling_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net, out):
+def initialize_post_sampling_spinful_sz_basis(fc_up, fc_dn, fcdag_up, fcdag_dn, net, out):
     """"
     Initializes the post-sampling state according to the specified occupation pattern.
 
@@ -292,4 +362,47 @@ def initialize_post_sampling_spinful(fc_up, fc_dn, fcdag_up, fcdag_dn, net, out)
         gamma[kk] = Ga.fuse_legs(axes=((0, 1), (2, 3), 4))
         
     return gamma
+
+def initialize_post_sampling_spinful_sx_basis(fc_up, fc_dn, fcdag_up, fcdag_dn, net, out):
+    """"
+    Initializes the post-sampling state according to the specified occupation pattern.
+
+    Parameters
+    ----------
+    fc_up : Annihilation operator for spin up fermions.
+    fc_dn : Annihilation operator for spin down fermions.
+    fcdag_up : Creation operator for spin up fermions.
+    fcdag_dn : Creation operator for spin down fermions.
+    net : class Lattice
+    out : dict
+        A dictionary specifying the occupation pattern. The keys are the lattice sites
+        and the values are integers indicating the occupation type (0 for spin-up, 1 for spin-down,
+        2 for double occupancy, and 3 for hole).
+
+    Returns
+    -------
+    gamma : Peps object
+        The post-sampling state tensor network.
+    """
+
+    s_plus = fcdag_up @ fc_dn
+    s_minus = fcdag_dn @ fc_up
+
+    sx_up = (s_plus + s_minus)/2 
+    sx_dn = (s_plus - s_minus)/2
+
+    h_up, h_dn = fc_up @ fcdag_up, fc_dn @ fcdag_dn
+
+    nn_up_sx, nn_dn_sx, nn_do_sx, nn_hole_sx = sx_up @ h_dn, h_up @ sx_dn, sx_up @ sx_dn, h_up @ h_dn
+    tt_sx = {0: nn_up_sx, 1: nn_dn_sx, 2: nn_do_sx, 3: nn_hole_sx}
+
+    gamma_sx = fpeps.Peps(net.lattice, net.dims, net.boundary)
+    for kk in gamma_sx.sites():
+        Ga = tt_sx[out[kk]].fuse_legs(axes=[(0, 1)])
+        for s in (-1, 1, 1, -1):
+            Ga = Ga.add_leg(axis=0, s=s)
+        gamma_sx[kk] = Ga.fuse_legs(axes=((0, 1), (2, 3), 4))
+
+    return gamma_sx
+
 

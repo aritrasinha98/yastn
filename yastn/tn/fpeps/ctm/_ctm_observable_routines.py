@@ -1,5 +1,5 @@
 # this routine just calculates nearest neighbor correlators
-
+import numpy as np
 from yastn import tensordot, svd_with_truncation, rand, ncon
 from ._ctm_iteration_routines import append_a_tl, append_a_br, append_a_tr, append_a_bl, fPEPS_2layers
 
@@ -13,6 +13,30 @@ def ret_AAbs(A, bds, op, orient):
         AAb = {'l': fPEPS_2layers(A[bds.site_0], op=op['l'], dir='1s'), 'r': fPEPS_2layers(A[bds.site_1], op=op['r'], dir='1s')}
     return AAb
 
+def apply_TM_left(vecl, env, site, AAb):
+    """ apply TM (bottom-AAB-top) to left boundary vector"""
+    new_vecl = tensordot(vecl, env[site].t, axes=(2, 0))
+    new_vecl = append_a_tl(new_vecl, AAb)
+    new_vecl = new_vecl.unfuse_legs(axes=0)
+    if new_vecl.ndim == 5:
+        new_vecl = ncon((new_vecl, env[site].b), ([1, -4, 2, -3, -2], [-1, 2, 1]))
+        new_vecl = new_vecl.fuse_legs(axes=((0, 3), 1, 2))
+    elif new_vecl.ndim == 4:
+        new_vecl = ncon((new_vecl, env[site].b), ([1, 2, -3, -2], [-1, 2, 1]))
+    return new_vecl
+
+def apply_TM_top(vect, env, site, AAb):
+    """ apply TM (left-AAB-right)   to top boundary vector"""
+    new_vect = tensordot(env[site].l, vect, axes=(2, 0))
+    new_vect = append_a_tl(new_vect, AAb)
+    new_vect = new_vect.unfuse_legs(axes=2)
+    
+    if new_vect.ndim == 5:
+        new_vect = ncon((new_vect, env[site].r), ([-1, -2, 2, -4, 1], [2, 1, -3]))
+        new_vect =  new_vect.fuse_legs(axes=(0, 1, (2, 3)))
+    elif new_vect.ndim == 4:
+        new_vect = ncon((new_vect, env[site].r), ([-1, -2, 2, 1], [2, 1, -3]))
+    return new_vect
 
 def apply_TMO_left(vecl, env, site, AAb):
     """ apply TM (bottom-AAB-top) to left boundary vector"""
@@ -67,7 +91,7 @@ def apply_TMO_bottom(vecb, env, site, AAb):
     return new_vecb
 
 
-def left_right_op_vectors(env, site_0, site_1, AAb):
+def left_right_op_vectors(env, site_0, site_1, AAbl, AAbr):
     """ form the left and right part in the process of evaluating a horizontal correlator before contracting them"""
 
     vecl = tensordot(env[site_0].l, env[site_0].tl, axes=(2, 0))
@@ -76,13 +100,13 @@ def left_right_op_vectors(env, site_0, site_1, AAb):
     vecr = tensordot(env[site_1].tr, env[site_1].r, axes=(1, 0)) 
     vecr = tensordot(vecr, env[site_1].br, axes=(2, 0))
 
-    new_vecl = apply_TMO_left(vecl, env, site_0, AAb['l'])
-    new_vecr = apply_TMO_right(vecr, env, site_1, AAb['r'])
+    new_vecl = apply_TMO_left(vecl, env, site_0, AAbl)
+    new_vecr = apply_TMO_right(vecr, env, site_1, AAbr)
 
     return new_vecl, new_vecr
 
 
-def top_bottom_op_vectors(env, site_0, site_1, AAb):
+def top_bottom_op_vectors(env, site_0, site_1, AAbt, AAbb):
     """ form the top and bottom part in the process of evaluating a vertical correlator before contracting them"""
 
     vect = tensordot(env[site_0].tl, env[site_0].t, axes=(1, 0))
@@ -91,10 +115,98 @@ def top_bottom_op_vectors(env, site_0, site_1, AAb):
     vecb = tensordot(env[site_1].b, env[site_1].bl, axes=(2, 0))
     vecb = tensordot(env[site_1].br, vecb, axes=(1, 0))
 
-    new_vect = apply_TMO_top(vect, env, site_0, AAb['l'])
-    new_vecb = apply_TMO_bottom(vecb, env, site_1, AAb['r'])
+    new_vect = apply_TMO_top(vect, env, site_0, AAbt)
+    new_vecb = apply_TMO_bottom(vecb, env, site_1, AAbb)
 
     return new_vect, new_vecb
+
+
+
+
+def array_EV2pt(peps, env, site0, site1, op=None):
+    """
+    Calculate two-point axial correlators between two sites site0 and site1.
+
+    Args:
+        peps: Class Peps.
+        env: Class CtmEnv contaning data for CTM environment tensors .
+        site0: The coordinate of the first site as a tuple of two integers.
+        site1: The coordinate of the second site as a tuple of two integers.
+        op: An optional dictionary specifying the operators to be applied to the sites.
+
+    Returns:
+        array_vals: A numpy array representing the calculated correlators.
+
+    Raises:
+        ValueError: If site0 and site1 are the same, or if they are not aligned either horizontally or vertically.
+    """
+
+    # check if horizontal or vertical
+    
+    dx, dy = site1[0] - site0[0], site1[1] - site0[1]
+    if dx == dy == 0:
+        raise ValueError("Both sites are the same.")
+    elif dx != 0 and dy != 0:
+        raise ValueError("Both sites should be aligned vertically or horizontally.")
+    
+    orient = 'horizontal' if dx == 0 else 'vertical'
+    num_correlators = abs(dy) if orient == 'horizontal' else abs(dx)
+    nxt_site = peps.nn_site(site0, d='r' if orient == 'horizontal' else 'b')  
+    
+    if orient == 'horizontal':
+        AAbl = fPEPS_2layers(peps[site0])
+        AAbr = fPEPS_2layers(peps[nxt_site])
+    elif orient == 'vertical':
+        AAbt = fPEPS_2layers(peps[site0])
+        AAbb = fPEPS_2layers(peps[nxt_site])
+
+    if op is not None:
+        if orient == 'horizontal':
+            AAbl = fPEPS_2layers(peps[site0], op=op['l'], dir='l')
+            AAbr = fPEPS_2layers(peps[nxt_site], op=op['r'], dir='r')
+        elif orient == 'vertical':
+            AAbt = fPEPS_2layers(peps[site0], op=op['l'], dir='t')
+            AAbb = fPEPS_2layers(peps[nxt_site], op=op['r'], dir='b')
+
+    array_vals = np.zeros((num_correlators))
+    if orient == 'horizontal': 
+        left_bound_vec, right_bound_vec = left_right_op_vectors(env, site0, nxt_site, AAbl, AAbr) 
+    elif orient == 'vertical':
+        left_bound_vec, right_bound_vec = top_bottom_op_vectors(env, site0, nxt_site, AAbt, AAbb) 
+
+    array_vals[0] = con_bi(left_bound_vec, right_bound_vec) 
+    vecl = left_bound_vec
+
+    for num in range(2, num_correlators+1):
+        
+        AAb_nxt = fPEPS_2layers(peps[nxt_site])
+        new_vecl = apply_TM_left(vecl, env, nxt_site, AAb_nxt) if orient == 'horizontal' else apply_TM_top(vecl, env, nxt_site, AAb_nxt)
+        nxt_site = peps.nn_site(nxt_site, d='r' if orient == 'horizontal' else 'b')  
+
+        if op is not None:
+            if orient == 'horizontal':
+                AAbr = fPEPS_2layers(peps[nxt_site], op=op['r'], dir='r')
+            elif orient == 'vertical':
+                AAbb = fPEPS_2layers(peps[nxt_site], op=op['r'], dir='b')
+        else:
+            if orient == 'horizontal':
+                AAbr = fPEPS_2layers(peps[nxt_site])
+            elif orient == 'vertical':
+                AAbb = fPEPS_2layers(peps[nxt_site])                 
+                                 
+        if orient == 'horizontal':
+            vecr = tensordot(env[nxt_site].tr, env[nxt_site].r, axes=(1, 0)) 
+            vecr = tensordot(vecr, env[nxt_site].br, axes=(2, 0))
+            right_bound_vec = apply_TMO_right(vecr, env, nxt_site, AAbr)
+        elif orient == 'vertical':
+            vecb = tensordot(env[nxt_site].b, env[nxt_site].bl, axes=(2, 0))
+            vecb = tensordot(env[nxt_site].br, vecb, axes=(1, 0))
+            right_bound_vec = apply_TMO_bottom(vecb, env, nxt_site, AAbb)
+         
+        array_vals[num-1] = con_bi(new_vecl, right_bound_vec) 
+        vecl = new_vecl
+
+    return array_vals
 
 def con_bi(new_vecl, new_vecr):
     return tensordot(new_vecl, new_vecr, axes=((0, 1, 2), (2, 1, 0))).to_number()
@@ -120,3 +232,83 @@ def ver_extension(env, bd, AAbo, AAb):
 
     return (ver/ver_norm)
 
+#### diagonal correlation
+def make_ext_corner_tl(cortl, strt_l, strl_t, AAb, AAbop, orient):
+    vec_cor_tl = strl_t @ cortl @ strt_l
+    if orient == '1ws':
+        new_vec_cor_tl = append_a_tl(vec_cor_tl, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+        new_vec_cor_tl = new_vec_cor_tl.unfuse_legs(axes=2).unfuse_legs(axes=2)
+        new_vec_cor_tl = new_vec_cor_tl.swap_gate(axes=(4, 3))
+        new_vec_cor_tl = new_vec_cor_tl.fuse_legs(axes=(0, 1, (2, 4), 5, 3))
+    elif orient == '1wo':
+        new_vec_cor_tl = append_a_tl(vec_cor_tl, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+    else:
+        new_vec_cor_tl = append_a_tl(vec_cor_tl, AAb).fuse_legs(axes=(0, 1, 3, 2))
+    return new_vec_cor_tl
+
+def make_ext_corner_tr(cortr, strt_r, strr_t, AAb, AAbop, orient):
+    vec_cor_tr = strt_r @ cortr @ strr_t
+    if orient == '2ws': # operator with string ... dirn 2 means operator sare in top right and bottom left corner
+        new_vec_cor_tr = append_a_tr(vec_cor_tr, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+        new_vec_cor_tr = new_vec_cor_tr.unfuse_legs(axes=1).unfuse_legs(axes=1)
+        new_vec_cor_tr = new_vec_cor_tr.swap_gate(axes=(2, 3))
+        new_vec_cor_tr = new_vec_cor_tr.fuse_legs(axes=(0, (1, 3), 4, 5, 2))
+    elif orient == '2wo': # operator without string ... dirn 2 means operator sare in top right and bottom left corner
+        new_vec_cor_tr = append_a_tr(vec_cor_tr, AAbop).fuse_legs(axes=(0, 1, 3, 2)) 
+    else:
+        new_vec_cor_tr = append_a_tr(vec_cor_tr, AAb).fuse_legs(axes=(0, 1, 3, 2))  
+    return new_vec_cor_tr
+
+def make_ext_corner_bl(corbl, strb_l, strl_b, AAb, AAbop, orient):
+    vec_cor_bl = strb_l @ corbl @ strl_b
+    if orient == '2ws': # fermionic operator with string ... dirn 2 means operator sare in top right and bottom left corner
+        new_vec_cor_bl = append_a_bl(vec_cor_bl, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+        new_vec_cor_bl = new_vec_cor_bl.unfuse_legs(axes=1).unfuse_legs(axes=1)
+        new_vec_cor_bl = new_vec_cor_bl.swap_gate(axes=(2, 1))
+        new_vec_cor_bl = new_vec_cor_bl.fuse_legs(axes=(0, (1, 3), 4, 5, 2))
+    elif orient == '2wo': # bosonic operator without string ... dirn 2 means operator sare in top right and bottom left corner
+        new_vec_cor_bl = append_a_bl(vec_cor_bl, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+    else:
+        new_vec_cor_bl = append_a_bl(vec_cor_bl, AAb).fuse_legs(axes=(0, 1, 3, 2))
+    return new_vec_cor_bl
+
+def make_ext_corner_br(corbr, strb_r, strr_b, AAb, AAbop, orient):
+    vec_cor_br = strr_b @ corbr @ strb_r
+    if orient == '1ws': # fermionic operator with string ... dirn 1 means operators are in top left and bottom right corner
+        new_vec_cor_br = append_a_br(vec_cor_br, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+        new_vec_cor_br = new_vec_cor_br.unfuse_legs(axes=2).unfuse_legs(axes=2)
+        new_vec_cor_br = new_vec_cor_br.swap_gate(axes=(2, 3))
+        new_vec_cor_br = new_vec_cor_br.fuse_legs(axes=(0, 1, (2, 4), 5, 3))
+    elif orient == '1wo': # fermionic operator without string ... dirn 1 means operators are in top left and bottom right corner
+        new_vec_cor_br = append_a_br(vec_cor_br, AAbop).fuse_legs(axes=(0, 1, 3, 2))
+    else:
+        new_vec_cor_br = append_a_br(vec_cor_br, AAb).fuse_legs(axes=(0, 1, 3, 2))
+    return new_vec_cor_br
+
+
+def diagonal_correlation(env, indten_tl, AAb_top, AAb_bottom, AAbop_top, AAbop_bottom, orient=None):
+    """ construct diagonal correlators """
+    if indten_tl == 0:
+        indten_tr, indten_br, indten_bl = 1, 0, 1
+    else:
+        indten_tr, indten_br, indten_bl = 0, 1, 0
+    vec_tl = make_ext_corner_tl(env['cortl', indten_tl], env['strt', indten_tl], env['strl', indten_tl], AAb_top['l'], AAbop_top['l'], orient)
+    vec_tr = make_ext_corner_tr(env['cortr', indten_tr], env['strt', indten_tr], env['strr', indten_tr], AAb_top['r'], AAbop_top['r'], orient)
+    vec_bl = make_ext_corner_bl(env['corbl', indten_bl], env['strb', indten_bl], env['strl', indten_bl], AAb_bottom['l'], AAbop_bottom['l'], orient)
+    vec_br = make_ext_corner_br(env['corbr', indten_br], env['strb', indten_br], env['strr', indten_br], AAb_bottom['r'], AAbop_bottom['r'], orient)
+    if orient == '1ws':
+        corr_l = ncon((vec_tl, vec_bl), ([2, 1, -3, -4, -5], [-1, -2, 1, 2]))
+        corr_r = ncon((vec_br, vec_tr), ([2, 1, -2, -1, -5], [-4, -3, 1, 2]))
+        corr = tensordot(corr_l, corr_r, axes=((0, 1, 2, 3, 4), (0, 1, 2, 3, 4))).to_number()
+       
+    elif orient == '2ws':
+        corr_l = ncon((vec_tl, vec_bl), ([2, 1, -3, -4], [-1, -2, 1, 2, -5]))
+        corr_r = ncon((vec_br, vec_tr), ([2, 1, -2, -1], [-4, -3, 1, 2, -5]))
+        corr = tensordot(corr_l, corr_r, axes=((0, 1, 2, 3, 4), (0, 1, 2, 3, 4))).to_number()
+       
+    else:
+        corr_l = ncon((vec_tl, vec_bl), ([2, 1, -3, -4], [-1, -2, 1, 2]))
+        corr_r = ncon((vec_br, vec_tr), ([2, 1, -2, -1], [-4, -3, 1, 2]))
+        corr = tensordot(corr_l, corr_r, axes=((0, 1, 2, 3), (0, 1, 2, 3))).to_number()
+
+    return corr

@@ -173,6 +173,64 @@ def form_new_peps_tensors(QA, QB, MA, MB, bond):
     return A, B
 
 
+def environment_aided_truncation_step_new(g, gRR, fgf, fgRAB, RA, RB, truncation_mode, opts_svd):
+
+    """ 
+    truncation_mode = 'optimal' is for implementing EAT algorithm only applicable for symmetric
+    tensors and offers no advantage for dense tensors.
+
+    Returns
+    -------
+    MA, MB: truncated pair of tensors before alternate least square optimization
+    svd_error: here just implies the error incurred for the initial truncation 
+               before the optimization
+    """
+    
+    if truncation_mode == 'optimal':
+        G = ncon((g, RA, RB, RA, RB), ([1, 2, 3, 4], [1, -1], [-3, 3], [2, -2], [-4, 4]), conjs=(0, 0, 0, 1, 1))
+        UL, SL, _ = svd(G, axes=(0,(1,2,3)))
+        _, SR, UR = svd(G, axes=(2,(3,0,1)))
+
+        ll = SL.sqrt() @ UL
+        rr =  UR @ SR.sqrt()
+        tt = ll @ rr
+        UU, SV, VV = svd_with_truncation(tt, **opts_svd)
+
+
+
+        ZL1 = UL @ pinv(sqrt(SL))
+        ZL2 = UU * SV.sqrt()
+        zl = ZL1 @ ZL2 
+        ZR1 = UR*pinv(sqrt(sR))
+        ZR2 = conj(v)*sqrt(sv)
+        ZR = ZR1 @ ZR2
+
+
+        [ul, _, vr] = svd_with_truncation(G, axes=((0, 1), (2, 3)), tol_block=1e-15, D_total=1)
+        ul = ul.remove_leg(axis=2)
+        vr = vr.remove_leg(axis=0)
+        GL, GR = ul.transpose(axes=(1, 0)), vr
+        _, SL, UL = svd(GL)
+        UR, SR, _ = svd(GR)
+        XL, XR = SL.sqrt() @ UL, UR @ SR.sqrt()
+        XRRX = XL @ XR
+        U, L, V = svd_with_truncation(XRRX, sU=RA.get_signature()[1], **opts_svd)
+        mA, mB = U @ L.sqrt(), L.sqrt() @ V
+        MA, MB, svd_error, _ = optimal_initial_pinv(mA, mB, RA, RB, gRR, SL, UL, SR, UR, fgf, fgRAB)
+        return MA, MB, svd_error
+
+    elif truncation_mode == 'normal':
+
+        MA, MB = truncation_step(RA, RB, opts_svd)
+        MAB = MA @ MB
+        MAB = MAB.fuse_legs(axes=[(0, 1)])
+        gMM = vdot(MAB, fgf @ MAB).item()
+        gMR = vdot(MAB, fgRAB).item()
+        svd_error = abs((gMM + gRR - gMR - gMR.conjugate()) / gRR)
+         
+    return MA, MB, svd_error
+
+
 def environment_aided_truncation_step(g, gRR, fgf, fgRAB, RA, RB, truncation_mode, opts_svd):
 
     """ 
@@ -217,7 +275,7 @@ def optimal_initial_pinv(mA, mB, RA, RB, gRR, SL, UL, SR, UR, fgf, fgRAB):
 
     """ function for choosing the optimal initial cutoff for the inverse which gives the least svd_error """
 
-    cutoff_list = [10**n for n in range(-14, -5)]
+    cutoff_list = [10**n for n in range(-14, -10)]
     results = []
     for c_off in cutoff_list:
         XL_inv, XR_inv = tensordot(UL.conj(), SL.sqrt().reciprocal(cutoff=c_off), axes=(0, 0)), tensordot(SR.sqrt().reciprocal(cutoff=c_off), UR.conj(), axes=(1, 1)) 
@@ -313,7 +371,7 @@ def optimal_pinv(gg, J, gRR):
     assert (gg - gg.conj().transpose(axes=(1, 0))).norm() < 1e-12 * gg.norm()
     S, U = eigh_with_truncation(gg, axes=(0, 1), tol=1e-14)
     UdJ = tensordot(J, U, axes=(0, 0), conj=(0, 1))
-    cutoff_list = [10**n for n in range(-14, -5)]
+    cutoff_list = [10**n for n in range(-14, -10)]
     results = []
     for c_off in cutoff_list:
         Sd = S.reciprocal(cutoff=c_off)
