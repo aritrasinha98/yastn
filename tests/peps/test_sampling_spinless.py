@@ -6,10 +6,10 @@ import yastn
 import yastn.tn.fpeps as fpeps
 import yastn.tn.mps as mps
 import time
-from yastn.tn.fpeps.operators.gates import gates_hopping, gate_local_fermi_sea, gate_local_Hubbard
+from yastn.tn.fpeps.operators.gates import gates_hopping, gate_local_fermi_sea
 from yastn.tn.fpeps.evolution import evolution_step_, gates_homogeneous
 from yastn.tn.fpeps import initialize_peps_purification
-from yastn.tn.fpeps.ctm import sample, nn_bond, CtmEnv2Mps, nn_avg, ctmrg, init_rand, one_site_avg, Local_CTM_Env
+from yastn.tn.fpeps.ctm import sample, CtmEnv2Mps, nn_avg, ctmrg
 
 from yastn.tn.mps import Env2, Env3
 
@@ -26,8 +26,8 @@ def not_working_test_sampling_spinless():
     lattice = 'rectangle'
     boundary = 'finite'
     purification = 'True'
-    xx = 4
-    yy = 4
+    xx = 3
+    yy = 3
     Ds = 5
     chi = 10
     mu = 0 # chemical potential
@@ -74,7 +74,7 @@ def not_working_test_sampling_spinless():
     for step in ctmrg(psi, max_sweeps, iterator_step=1, AAb_mode=0, opts_svd=opts_svd_ctm):
         
         assert step.sweeps % 1 == 0 # stop every 4th step as iteration_step=4
-        obs_hor, obs_ver =  nn_avg(psi, step.env, ops)
+        obs_hor, obs_ver, _, _ =  nn_avg(psi, step.env, ops)
 
         cdagc = 0.5*(abs(obs_hor.get('cdagc')) + abs(obs_ver.get('cdagc')))
         ccdag = 0.5*(abs(obs_hor.get('ccdag')) + abs(obs_ver.get('ccdag')))
@@ -86,18 +86,19 @@ def not_working_test_sampling_spinless():
             break # here break if the relative differnece is below tolerance
         cf_energy_old = cf_energy
 
+
+    ###  we try to find out the right boundary vector of the left-most column or 0th row
     ########## 3x3 lattice ########
     ###############################
-    ##### (0,0) (0,1) (0,2) #######
-    ##### (1,0) (1,1) (1,2) #######
-    ##### (2,0) (2,1) (2,2) #######
+    ##### (0,0) (1,0) (2,0) #######
+    ##### (0,1) (1,1) (2,1) #######
+    ##### (0,2) (1,2) (2,2) #######
     ###############################
 
-    """phi = psi.boundary_mps()   # creates the left bondary vector from the PEPS
+    phi = psi.boundary_mps()
     opts = {'D_total': chi}
 
     for r_index in range(net.Ny-1,-1,-1):
-        print('r_index: ',r_index)
         Bctm = CtmEnv2Mps(net, step.env, index=r_index, index_type='r')  # right boundary of r_index th column through CTM environment tensors
 
        # assert all(Bctm[i].get_shape() == psi[i].get_shape() for i in range(net.Nx))
@@ -105,11 +106,9 @@ def not_working_test_sampling_spinless():
         assert pytest.approx(abs(mps.vdot(phi, Bctm)) / (phi.norm() * Bctm.norm()), rel=1e-8) == 1.0
 
         phi0 = phi.copy()
-        Os = psi.mpo(index=r_index, index_type='column') # converts the rth column of Double PEPS into an MPO to be applied on 
-                                                     # the right boundary vector at r_index to form a boundary vector at (r_index-1)
-
-        phi = mps.zipper(Os, phi0, opts)  # right boundary of (r_index-1) th column through zipper
-        mps.compression_(phi, (Os, phi0), method='1site', max_sweeps=2)"""
+        O = psi.mpo(index=r_index, index_type='column')
+        phi = mps.zipper(O, phi0, opts)  # right boundary of (r_index-1) th column through zipper
+        mps.compression_(phi, (O, phi0), method='1site', max_sweeps=2)
 
     nn, hh = fcdag @ fc, fc @ fcdag
     projectors = [nn, hh]
@@ -119,4 +118,3 @@ def not_working_test_sampling_spinless():
 if __name__ == '__main__':
     logging.basicConfig(level='INFO')
     not_working_test_sampling_spinless()
-
